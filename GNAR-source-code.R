@@ -1,4 +1,19 @@
-# GNAR package source code ----------------------------------------------------------------------------------
+library(GNAR)
+print(GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 1, betaOrder = 1, globalalpha = FALSE, 
+              ErrorIfNoNei = FALSE))
+
+vts = fiveVTS
+net = fiveNet
+alphaOrder = 2
+betaOrder = c(2,1)
+globalalpha = FALSE
+ErrorIfNoNei = FALSE
+fact.var = NULL
+tvnets = NULL
+netsstart = NULL
+
+
+  # GNAR package source code ----------------------------------------------------------------------------------
 
 GNARfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
                      betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
@@ -20,13 +35,13 @@ GNARfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
   }
   stopifnot(is.null(tvnets))
   useNofNei <- 1
-  frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder, 
+  frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder, # list of GNAR model settings
                 betas.in = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
                 xtsp = tsp(vts), time.in = nrow(vts), net.in = net, final.in = vts[(nrow(vts) - 
                                                                                       alphaOrder + 1):nrow(vts), ])
   dmat <- GNARdesign(vts = vts, net = net, alphaOrder = alphaOrder, 
                      betaOrder = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
-                     tvnets = tvnets, netsstart = netsstart)
+                     tvnets = tvnets, netsstart = netsstart) # design matrix formulation
   if (ErrorIfNoNei) {
     if (any(apply(dmat == 0, 2, all))) {
       parname <- strsplit(names(which(apply(dmat == 0, 
@@ -39,8 +54,10 @@ GNARfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
   predt <- nrow(vts) - alphaOrder
   yvec <- NULL
   for (ii in 1:length(net$edges)) {
-    yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), 
-                        ii])
+    yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), ii]) 
+    
+    # yvec is vec(Y^T)
+                        
   }
   if (sum(is.na(yvec)) > 0) {
     yvec2 <- yvec[!is.na(yvec)]
@@ -48,25 +65,20 @@ GNARfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
     modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
   }
   else {
-    modNoIntercept <- lm(yvec ~ dmat + 0)
+    modNoIntercept <- lm(yvec ~ dmat + 0) 
+    # OLS regression to estimate GNAR parameters
+    # Regressing vec(Y^T) on dmat??? Not even FGLS either?
   }
   out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic)
   class(out) <- "GNARfit"
   return(out)
 }
 
+# --------------------------------------------------------------------------------------------
 
 
 
 
-vts = GNAR::fiveVTS
-net = GNAR::fiveNet
-alphaOrder = 2 
-betaOrder = c(1, 1)
-fact.var = NULL
-globalalpha = FALSE 
-tvnets = NULL
-netsstart = NULL
 
 GNARdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
                         betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
@@ -112,14 +124,14 @@ GNARdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2
     }
   }
   maxOrder <- alphaOrder                                      # p, e.g. 2
-  predt <- nrow(vts) - maxOrder                               # T, e.g. 198
+  predt <- nrow(vts) - maxOrder                               # T-p, e.g. 198
   nnodes <- ncol(vts)                                         # N, e.g. 5
   if (globalalpha) {
     dmat <- matrix(0, nrow = predt * nnodes, ncol = sum(c(alphaOrder, 
                                                           betaOrder)), dimnames = list(NULL, parNames))
   } else {
     dmat <- matrix(0, nrow = predt * nnodes, ncol = sum(c(alphaOrder * 
-                                                            nnodes, betaOrder)), dimnames = list(NULL, parNames))  # NT\times M matrix of zeros
+                                                            nnodes, betaOrder)), dimnames = list(NULL, parNames))  # N(T-p)\times M matrix of zeros
   }
   for (ii in 1:nnodes) {                                     # For i in 1:N
     for (aa in 1:alphaOrder) {                               # For j in 1:p
@@ -131,8 +143,22 @@ GNARdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2
                                                      1) + ii]     # alphaloc is the N(j-1)+i entry of which(parLoc == "a"), e.g. for i=5 and j=2, 10th entry gives alphaLoc=11
       }
       dmat[((predt * (ii - 1) + 1):(predt * ii)), alphaLoc] <- vts[((maxOrder + 
-                                                                       1 - aa):(predt + (maxOrder - aa))), ii] # Filled up alpha columns with values, D_{ T*(i-1)+1 : T*i , alphaloc} = 
-      # X_{  (p+1-j) : T+(p-j), i }, T\times1 block assignment for each i and j
+                                                 1 - aa):(predt + (maxOrder - aa))), ii] 
+      # Filled up alpha columns with values, D_{ (T-p)*(i-1)+1 : (T-p)*i , alphaloc} = 
+      # X_{  (p+1-j) : T-j, i }, (T-p)\times1 block assignment for each i and j
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
     }
   }
   if (sum(betaOrder) > 0) {
