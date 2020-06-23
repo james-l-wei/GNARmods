@@ -45,7 +45,7 @@ GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alp
   }
   predt <- nrow(vts) - alphaOrder
   yvec <- NULL
-  ymat <- t(vts) # Changed to ensure vec(Y) is used, not vec(Y^T)
+  ymat <- t(vts)
   for (ii in (alphaOrder + 1):(predt + alphaOrder)) {
     yvec <- c(yvec, ymat[, ii])
   }
@@ -117,9 +117,15 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
       }
     }
   }
-  maxOrder <- alphaOrder                                      # p, e.g. 2
-  predt <- nrow(vts) - maxOrder                               # T-p, e.g. 198
-  nnodes <- ncol(vts)                                         # N, e.g. 5
+  if(!is.null(lambdaOrder)){
+    for(ii in 0:lambdaOrder){
+      parNames <- c(parNames, paste("lambda", ii, sep = ""))
+      parLoc <- c(parLoc, "l") 
+    }
+  }
+  maxOrder <- max(alphaOrder, lambdaOrder)                    # p*
+  predt <- nrow(vts) - maxOrder                               # T-p*
+  nnodes <- ncol(vts)                                         # N
   # if (globalalpha) {
   #   dmat <- matrix(0, nrow = predt * nnodes, 
   #                  ncol = sum(c(alphaOrder, betaOrder)), dimnames = list(NULL, parNames))
@@ -128,13 +134,44 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
   #                  ncol = sum(c(alphaOrder * nnodes, betaOrder)), 
   #                  dimnames = list(NULL, parNames))  
   # }
-  dmat <- matrix(0, nrow = predt * nnodes, 
-                 ncol = sum(c(alphaOrder * nnodes, betaOrder)), 
-                 dimnames = list(NULL, parNames)) # N(T-p)\times M matrix of zeros
-  Zmat <- xxx
+  Zmat <- matrix(0, nrow = nnodes * (alphaOrder + lambdaOrder + 1), ncol = predt)
+  Zmat <- t(vts[maxOrder:(nrow(vts)-1),])
+  for(ii in 1:(alphaOrder-1)){
+    Zmat <- rbind(Zmat, t(vts[(maxOrder-ii):(nrow(vts)-1-ii),]))
+  }
+  for(jj in 1:(lambdaOrder + 1)){
+    Zmat <- rbind(Zmat, t(xvts[(maxOrder+2-jj):(nrow(xvts)+1-jj),]))
+  }
+  Amat <- matrix(0, ncol=nnodes, nrow=1)
+  Amat[1, 1] <- 1
+  for(ii in 2:nnodes){
+    Amat <- rbind(Amat, matrix(0, nnodes, nnodes))
+    Amat2 <- matrix(0, ncol=nnodes, nrow=1)
+    Amat2[1, ii] <- 1
+    Amat <- rbind(Amat, Amat2)
+  }
+  Lmat <- matrix(0, ncol=1, nrow=nnodes^2)
+  ii2 <- 1
+  for(ii in 1:nnodes){
+    Lmat[ii2,1] <- 1
+    ii2 <- ii2 + nnodes + 1
+  }
+  Rkmatlist <- list()
+  for(ii in 1:alphaOrder){ # What about if betaorder=c(1,0)?
+    if(betaOrder[[ii]]!=0){
+      Rkmat <- vec(as.matrix(net, stage = 1))
+      if(betaOrder[[ii]] > 1){
+        for(jj in 2:betaOrder[[ii]]){
+          Rkmat <- cbind(Rkmat, vec(as.matrix(net, stage = jj)))
+        }
+      }
+      Rkmatlist[[ii]] <- Rkmat
+    }
+  }
   
   
-  
+  Rmat <- xxx
+  dmat <- (t(Zmat) %x% diag(nnodes)) %*% Rmat
   
   
   
