@@ -7,12 +7,25 @@ testFitGNAR <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2,
 summary(testFitGNARX$mod)
 summary(testFitGNAR$mod)
 
+
 testFitGNARX.loc <- GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
                          betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = TRUE) 
 testFitGNAR.loc <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
                        betaOrder = c(2, 1), globalalpha = TRUE) 
 summary(testFitGNARX.loc$mod)
 summary(testFitGNAR.loc$mod)
+
+testFunction1 <- function(){
+  GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
+           betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = FALSE)
+}
+testFunction2 <- function(){
+  GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
+          betaOrder = c(2, 1), globalalpha = FALSE)
+}  
+benchmark(replications=10, testFunction1(), testFunction2(),
+          columns=c('test', 'elapsed', 'replications'))
+
 
 # --------------------------------------------------------------------------------
 
