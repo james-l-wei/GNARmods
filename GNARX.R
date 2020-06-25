@@ -1,9 +1,9 @@
 # Test: comparison with GNARfit function (i.e. no exogenous regressors)
 
 testFitGNARX <- GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
-                        betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = FALSE) 
+                        betaOrder = c(0, 0), lambdaOrder = NULL, globalalpha = FALSE) 
 testFitGNAR <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
-                         betaOrder = c(2, 1), globalalpha = FALSE) 
+                         betaOrder = c(0, 0), globalalpha = FALSE) 
 summary(testFitGNARX$mod)
 summary(testFitGNAR$mod)
 
@@ -156,8 +156,10 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
   predt <- nrow(vts) - maxOrder                             
   nnodes <- ncol(vts)
   Zmat <- t(vts[maxOrder:(nrow(vts)-1),])
-  for(ii in 1:(alphaOrder-1)){
-    Zmat <- rbind(Zmat, t(vts[(maxOrder-ii):(nrow(vts)-1-ii),]))
+  if(alphaOrder > 1){
+    for(ii in 1:(alphaOrder-1)){
+      Zmat <- rbind(Zmat, t(vts[(maxOrder-ii):(nrow(vts)-1-ii),]))
+    }
   }
   if(!is.null(lambdaOrder)){
     for(jj in 1:(lambdaOrder + 1)){
@@ -184,11 +186,11 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
   }
   Rkmatlist <- list()
   for(ii in 1:alphaOrder){
-    if(betaOrder[[ii]]!=0){
-      Rkmat <- vec(as.matrix(net, stage = 1))
-      if(betaOrder[[ii]] > 1){
-        for(jj in 2:betaOrder[[ii]]){
-          Rkmat <- cbind(Rkmat, jj * vec(as.matrix(net, stage = jj)))
+    if(betaOrder[ii]!=0){
+      Rkmat <- vec(as.matrix(net, stage = 1, normalise = TRUE))
+      if(betaOrder[ii] > 1){
+        for(jj in 2:betaOrder[ii]){
+          Rkmat <- cbind(Rkmat, vec(as.matrix(net, stage = jj, normalise = TRUE)))
         }
       }
       Rkmatlist[[ii]] <- Rkmat
@@ -203,15 +205,23 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
   rowEnd <- nnodes^2
   colStart <- 1
   if(globalalpha == FALSE){
-    colEnd <- nnodes + betaOrder[[1]]
-    Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
+    colEnd <- nnodes + betaOrder[1]
+    if(betaOrder[1] == 0){
+      Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
+    }else{
+      Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
+    }
     if(alphaOrder > 1){
       for(ii in 2:alphaOrder){
         rowStart <- rowEnd + 1
         rowEnd <- rowEnd + nnodes^2
         colStart <- colEnd + 1
-        colEnd <- colEnd + nnodes + betaOrder[[ii]]
-        Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
+        colEnd <- colEnd + nnodes + betaOrder[ii]
+        if(betaOrder[ii] == 0){
+          Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
+        }else{
+          Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
+        }
       }
     }
     if(!is.null(lambdaOrder)){
@@ -229,15 +239,23 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
       }
     }
   }else{
-    colEnd <- 1 + betaOrder[[1]]
-    Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
+    colEnd <- 1 + betaOrder[1]
+    if(betaOrder[1] == 0){
+      Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
+    }else{
+      Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
+    }
     if(alphaOrder > 1){
       for(ii in 2:alphaOrder){
         rowStart <- rowEnd + 1
         rowEnd <- rowEnd + nnodes^2
         colStart <- colEnd + 1
-        colEnd <- colEnd + 1 + betaOrder[[ii]]
-        Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
+        colEnd <- colEnd + 1 + betaOrder[ii]
+        if(betaOrder[ii] == 0){
+          Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
+        }else{
+          Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
+        }
       }
     }
     if(!is.null(lambdaOrder)){
