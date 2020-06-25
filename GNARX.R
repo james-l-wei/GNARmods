@@ -6,7 +6,8 @@ testFitGNAR <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2,
                          betaOrder = c(0, 0), globalalpha = FALSE) 
 summary(testFitGNARX$mod)
 summary(testFitGNAR$mod)
-
+print(testFitGNARX$BIC)
+print(BIC(testFitGNAR))
 
 testFitGNARX.loc <- GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
                          betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = TRUE) 
@@ -26,8 +27,7 @@ testFunction2 <- function(){
 benchmark(replications=10, testFunction1(), testFunction2(),
           columns=c('test', 'elapsed', 'replications'))
 
-
-# --------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alphaOrder = 2, 
                      betaOrder = c(1, 1), lambdaOrder = NULL, fact.var = NULL, globalalpha = FALSE, 
@@ -54,14 +54,24 @@ GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alp
   if(is.null(lambdaOrder)){
     stopifnot(is.null(xvts))
   }
+  if(!is.null(xvts)){
+    if(nrow(vts) != nrow(xvts)){
+      stop("vts and xvts must have the same time dimension")
+    }
+  }
   useNofNei <- 1
+  nnodes = length(net$edges)
   frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder,
                 betas.in = betaOrder, lambda.in = lambdaOrder,  fact.var = fact.var, 
                 globalalpha = globalalpha, xtsp = tsp(vts), time.in = nrow(vts), 
                 net.in = net, final.in = vts[(nrow(vts) - alphaOrder + 1):nrow(vts), ])
-  dmat <- GNARXdesign(vts = vts, xvts = xvts, net = net, alphaOrder = alphaOrder, 
+  designList <- GNARXdesign(vts = vts, xvts = xvts, net = net, alphaOrder = alphaOrder, 
                      betaOrder = betaOrder, lambdaOrder = lambdaOrder, fact.var = fact.var, 
                      globalalpha = globalalpha, tvnets = tvnets, netsstart = netsstart)
+  
+  dmat <- designList[[1]]
+  Rmat <- designList[[2]]
+  Zmat <- designList[[3]]
   if (ErrorIfNoNei) {
     if (any(apply(dmat == 0, 2, all))) {
       parname <- strsplit(names(which(apply(dmat == 0, 2, all)))[1], split = NULL)[[1]]
@@ -70,21 +80,29 @@ GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alp
            betastage)
     }
   }
-  predt <- nrow(vts) - alphaOrder
-  yvec <- NULL
-  ymat <- t(vts)
-  for (ii in (alphaOrder + 1):(predt + alphaOrder)) {
-    yvec <- c(yvec, ymat[, ii])
+  if(!is.null(lambdaOrder)){
+    maxOrder <- max(alphaOrder, lambdaOrder)
+  }else{
+    maxOrder <- alphaOrder
   }
+  predt <- nrow(vts) - maxOrder
+  ymat <- t(vts)[,(maxOrder + 1):(predt + maxOrder)]
+  yvec <- vec(ymat)
   if (sum(is.na(yvec)) > 0) {
     yvec2 <- yvec[!is.na(yvec)]
     dmat2 <- dmat[!is.na(yvec), ]
     modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
-  }
-  else {
+  }else{
     modNoIntercept <- lm(yvec ~ dmat + 0) 
   }
-  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic)
+  vecBhat <- Rmat %*% coef(modNoIntercept)
+  Bhat <- matrix(vecBhat, nrow = nnodes)
+  Uhat <- ymat - Bhat %*% Zmat
+  Uhat[is.na(Uhat)] <- 0
+  modBIC <- log(det((1/nrow(vts)) * Uhat %*% t(Uhat))) + (1/nrow(vts)) * 
+    length(coef(modNoIntercept)) * log(nrow(vts)) 
+  # If mostly NAs, this gets too small? But not working for fivenet
+  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic, BIC = modBIC)
   class(out) <- "GNARXfit"
   return(out)
 }
@@ -122,6 +140,11 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
       if(lambdaOrder%%1 != 0 || lambdaOrder < 0){
         stop("lambdaOrder must be a non-negative integer")
       }
+    }
+  }
+  if(!is.null(xvts)){
+    if(nrow(vts) != nrow(xvts)){
+      stop("vts and xvts must have the same time dimension")
     }
   }
   parNames <- parLoc <- NULL
@@ -275,5 +298,5 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
   }
   dmat <- (t(Zmat) %x% diag(nnodes)) %*% Rmat
   colnames(dmat) <- parNames
-  return(dmat)
+  return(list(dmat, Rmat, Zmat))
 }
