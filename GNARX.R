@@ -2,14 +2,14 @@ library(matrixcalc)
 library(GNAR)
 
 # Line-by-line test conditions
-# vts = PMIData
-# net = NNTradeNet
-# alphaOrder = 2
-# betaOrder = c(2, 1)
-# fact.var = NULL
-# globalalpha = FALSE
-# xvts = stringencyData
-# lambdaOrder = 1
+vts = PMIData
+net = NNTradeNet
+alphaOrder = 1 # 222
+betaOrder = rep(0, 1)
+fact.var = NULL
+globalalpha = TRUE
+xvts = NULL
+lambdaOrder = NULL
 
 # Comparisons with GNARfit
 # alphaOrder = 1, betaOrder = 0, globalalpha = TRUE
@@ -95,15 +95,19 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
     yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), 
                         ii])
   }
-  if (sum(is.na(yvec)) > 0) {
-    yvec2 <- yvec[!is.na(yvec)]
-    dmat2 <- dmat[!is.na(yvec), ]
-    modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
+  dmat2 <- dmat[complete.cases(dmat), ]
+  yvec2 <- yvec[complete.cases(dmat)]
+  if(sum(!is.na(yvec2)) > 0){
+    if(ncol(dmat) != 1){
+      dmat2 <- dmat2[!is.na(yvec2), ]
+    }else{
+      dmat2 <- dmat2[!is.na(yvec2)]
+    }
+    yvec2 <- yvec2[!is.na(yvec2)]
   }
-  else {
-    modNoIntercept <- lm(yvec ~ dmat + 0)
-  }
-  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic)
+  modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
+  fgls <- lm(yvec2 ~ dmat2 + 0, weights = 1/modNoIntercept$fitted.values^2)
+  out <- list(mod = fgls, y = yvec, dd = dmat, frbic = frbic)
   class(out) <- "GNARXfit"
   return(out)
 }
@@ -304,61 +308,65 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
 
-BIC.GNARXfit <- function (object, ...) 
-{
-  stopifnot(is.GNARfit(object))
-  nnodes.in <- object$frbic$nnodes
-  alphas.in <- object$frbic$alphas.in
-  betas.in <- object$frbic$betas.in
-  lambdas.in <- object$frbic$lambdas.in
-  fact.var <- object$frbic$fact.var
-  tot.time <- object$frbic$time.in
-  globalalpha <- object$frbic$globalalpha
-  dotarg <- list(...)
-  if (length(dotarg) != 0) {
-    if (!is.null(names(dotarg))) {
-      warning("... not used here, input(s) ", paste(names(dotarg), 
-                                                    collapse = ", "), " ignored")
-    }
-    else {
-      warning("... not used here, input(s) ", paste(dotarg, 
-                                                    collapse = ", "), " ignored")
-    }
-  }
-  if (!is.null(fact.var)) {
-    f.in <- length(unique(fact.var))
-  } else {
-    f.in <- 1
-  }
-  stopifnot(is.logical(globalalpha))
-  stopifnot(length(nnodes.in) == 1)
-  stopifnot(floor(nnodes.in) == nnodes.in)
-  stopifnot(tot.time != 0)
-  tmp.resid <- residToMat(GNARobj = object, nnodes = nnodes.in)$resid
-  # tmp.resid[is.na(tmp.resid)] <- 0
-  replace.resid.len <- sum(is.na(tmp.resid))
-  replace.resid <- rnorm(n = replace.resid.len, mean = mean(tmp.resid, na.rm = TRUE),
-                         sd = sd(tmp.resid, na.rm = TRUE))
-  tmp.resid[is.na(tmp.resid)] <- replace.resid
-  larg <- det((1/tot.time) * t(tmp.resid) %*% tmp.resid)
-  stopifnot(larg != 0)
-  tmp1 <- log(larg)
-  if(!is.null(lambdas.in)){
-    if (globalalpha) {
-      tmp2 <- f.in * (alphas.in + sum(betas.in) + lambdas.in + 1) * log(tot.time)/tot.time
-    }else {
-      tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in) + lambdas.in + 1) * 
-        log(tot.time)/tot.time
-    }
-  }else{
-    if (globalalpha) {
-      tmp2 <- f.in * (alphas.in + sum(betas.in)) * log(tot.time)/tot.time
-    }else {
-      tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in)) * 
-        log(tot.time)/tot.time
-    }
-  }
-  return(tmp1 + tmp2)
-}
+# Obsolete: just use the lm model to compute BIC
+# BIC.GNARXfit <- function (object, ...) 
+# {
+#   stopifnot(is.GNARfit(object))
+#   nnodes.in <- object$frbic$nnodes
+#   alphas.in <- object$frbic$alphas.in
+#   betas.in <- object$frbic$betas.in
+#   lambdas.in <- object$frbic$lambdas.in
+#   fact.var <- object$frbic$fact.var
+#   tot.time <- object$frbic$time.in
+#   globalalpha <- object$frbic$globalalpha
+#   modLogLik <- logLik(object$mod)
+#   dotarg <- list(...)
+#   if (length(dotarg) != 0) {
+#     if (!is.null(names(dotarg))) {
+#       warning("... not used here, input(s) ", paste(names(dotarg), 
+#                                                     collapse = ", "), " ignored")
+#     }
+#     else {
+#       warning("... not used here, input(s) ", paste(dotarg, 
+#                                                     collapse = ", "), " ignored")
+#     }
+#   }
+#   if (!is.null(fact.var)) {
+#     f.in <- length(unique(fact.var))
+#   } else {
+#     f.in <- 1
+#   }
+#   stopifnot(is.logical(globalalpha))
+#   stopifnot(length(nnodes.in) == 1)
+#   stopifnot(floor(nnodes.in) == nnodes.in)
+#   stopifnot(tot.time != 0)
+#   tmp.resid <- residToMat(GNARobj = object, nnodes = nnodes.in)$resid
+#   # tmp.resid[is.na(tmp.resid)] <- 0
+#   
+#   # replace.resid.len <- sum(is.na(tmp.resid))
+#   # replace.resid <- rnorm(n = replace.resid.len, mean = mean(tmp.resid, na.rm = TRUE),
+#   #                        sd = sd(tmp.resid, na.rm = TRUE))
+#   # tmp.resid[is.na(tmp.resid)] <- replace.resid
+#   
+#   larg <- det((1/tot.time) * t(tmp.resid) %*% tmp.resid)
+#   stopifnot(larg != 0)
+#   tmp1 <- log(larg)
+#   if(!is.null(lambdas.in)){
+#     if (globalalpha) {
+#       tmp2 <- f.in * (alphas.in + sum(betas.in) + lambdas.in + 1) * log(tot.time)/tot.time
+#     }else {
+#       tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in) + lambdas.in + 1) * 
+#         log(tot.time)/tot.time
+#     }
+#   }else{
+#     if (globalalpha) {
+#       tmp2 <- f.in * (alphas.in + sum(betas.in)) * log(tot.time)/tot.time
+#     }else {
+#       tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in)) * 
+#         log(tot.time)/tot.time
+#     }
+#   }
+#   return(tmp1 + tmp2)
+# }
   
   
