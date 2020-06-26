@@ -1,37 +1,42 @@
-# Test: comparison with GNARfit function (i.e. no exogenous regressors)
+library(matrixcalc)
+library(GNAR)
 
-testFitGNARX <- GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
-                        betaOrder = c(0, 0), lambdaOrder = NULL, globalalpha = FALSE) 
-testFitGNAR <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
-                         betaOrder = c(0, 0), globalalpha = FALSE) 
-summary(testFitGNARX$mod)
-summary(testFitGNAR$mod)
-print(testFitGNARX$BIC)
-print(BIC(testFitGNAR))
+# Line-by-line test conditions
+# vts = PMIData
+# net = NNTradeNet
+# alphaOrder = 2
+# betaOrder = c(2, 1)
+# fact.var = NULL
+# globalalpha = FALSE
+# xvts = stringencyData
+# lambdaOrder = 1
 
-testFitGNARX.loc <- GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
-                         betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = TRUE) 
-testFitGNAR.loc <- GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
-                       betaOrder = c(2, 1), globalalpha = TRUE) 
-summary(testFitGNARX.loc$mod)
-summary(testFitGNAR.loc$mod)
+# Comparisons with GNARfit
+# alphaOrder = 1, betaOrder = 0, globalalpha = TRUE
+# alphaOrder = 2, betaOrder = c(0, 0), globalalpha = TRUE
+# alphaOrder = 2, betaOrder = c(2, 1), globalalpha = TRUE
+# alphaOrder = 1, betaOrder = 0, globalalpha = FALSE
+# alphaOrder = 2, betaOrder = c(0, 0), globalalpha = FALSE
+# alphaOrder = 2, betaOrder = c(2, 1), globalalpha = FALSE
+# BIC.GNARXfit(GNARXfit(vts = PMIData, net = NNTradeNet, alphaOrder = 2, betaOrder = c(2,1), 
+#                       globalalpha = FALSE)) - BIC(GNARfit(vts = PMIData, 
+#                                                                   net = NNTradeNet, 
+#                                                                   alphaOrder = 2, 
+#                                                           betaOrder = c(2,1),
+#                                                                   globalalpha = FALSE))
 
-testFunction1 <- function(){
-  GNARXfit(vts = fiveVTS, xvts = NULL, net = fiveNet, alphaOrder = 2, 
-           betaOrder = c(2, 1), lambdaOrder = NULL, globalalpha = FALSE)
-}
-testFunction2 <- function(){
-  GNARfit(vts = fiveVTS, net = fiveNet, alphaOrder = 2, 
-          betaOrder = c(2, 1), globalalpha = FALSE)
-}  
-benchmark(replications=10, testFunction1(), testFunction2(),
-          columns=c('test', 'elapsed', 'replications'))
 
-# -------------------------------------------------------------------------------------
 
-GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alphaOrder = 2, 
-                     betaOrder = c(1, 1), lambdaOrder = NULL, fact.var = NULL, globalalpha = FALSE, 
-                     tvnets = NULL, netsstart = NULL, ErrorIfNoNei = TRUE) 
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+
+GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
+                      betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
+                      tvnets = NULL, netsstart = NULL, ErrorIfNoNei = TRUE, 
+                      xvts = NULL, lambdaOrder = NULL) 
 {
   stopifnot(is.GNARnet(net))
   stopifnot(ncol(vts) == length(net$edges))
@@ -48,70 +53,71 @@ GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alp
     cat("Time-varying networks not yet supported")
   }
   stopifnot(is.null(tvnets))
-  if(is.null(lambdaOrder) & (!is.null(xvts))){
-    cat("When external regressors included, a non-null lambdaOrder is required")
-  }
+  useNofNei <- 1
   if(is.null(lambdaOrder)){
-    stopifnot(is.null(xvts))
-  }
-  if(!is.null(xvts)){
-    if(nrow(vts) != nrow(xvts)){
-      stop("vts and xvts must have the same time dimension")
+    if(!is.null(xvts)){
+      stop("lambdaOrder must be specified when xvts is provided")
+    }else{
+      maxOrder <- alphaOrder
+    }
+  }else{
+    if(nrow(xvts) != nrow(vts)){
+      stop("xvts and vts must have the same time range")
+    }else{
+      if(lambdaOrder%%1 != 0 || lambdaOrder < 0){
+        stop("lambdaOrder must be a non-negative integer")
+      }else{
+        maxOrder <- max(alphaOrder, lambdaOrder)
+      }
     }
   }
-  useNofNei <- 1
-  nnodes = length(net$edges)
-  frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder,
-                betas.in = betaOrder, lambda.in = lambdaOrder,  fact.var = fact.var, 
-                globalalpha = globalalpha, xtsp = tsp(vts), time.in = nrow(vts), 
-                net.in = net, final.in = vts[(nrow(vts) - alphaOrder + 1):nrow(vts), ])
-  designList <- GNARXdesign(vts = vts, xvts = xvts, net = net, alphaOrder = alphaOrder, 
-                     betaOrder = betaOrder, lambdaOrder = lambdaOrder, fact.var = fact.var, 
-                     globalalpha = globalalpha, tvnets = tvnets, netsstart = netsstart)
-  
-  dmat <- designList[[1]]
-  Rmat <- designList[[2]]
-  Zmat <- designList[[3]]
+  frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder, 
+                betas.in = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
+                xtsp = tsp(vts), time.in = nrow(vts), net.in = net, 
+                final.in = vts[(nrow(vts) - maxOrder + 1):nrow(vts), ], 
+                lambdas.in = lambdaOrder)
+  dmat <- GNARXdesign(vts = vts, net = net, alphaOrder = alphaOrder, 
+                     betaOrder = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
+                     tvnets = tvnets, netsstart = netsstart, 
+                     xvts = xvts, lambdaOrder = lambdaOrder)
   if (ErrorIfNoNei) {
     if (any(apply(dmat == 0, 2, all))) {
-      parname <- strsplit(names(which(apply(dmat == 0, 2, all)))[1], split = NULL)[[1]]
+      parname <- strsplit(names(which(apply(dmat == 0, 
+                                            2, all)))[1], split = NULL)[[1]]
       betastage <- parname[(which(parname == ".") + 1):(length(parname))]
       stop("beta order too large for network, use max neighbour set smaller than ", 
            betastage)
     }
   }
-  if(!is.null(lambdaOrder)){
-    maxOrder <- max(alphaOrder, lambdaOrder)
-  }else{
-    maxOrder <- alphaOrder
+  predt <- nrow(vts) - alphaOrder
+  yvec <- NULL
+  for (ii in 1:length(net$edges)) {
+    yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), 
+                        ii])
   }
-  predt <- nrow(vts) - maxOrder
-  ymat <- t(vts)[,(maxOrder + 1):(predt + maxOrder)]
-  yvec <- vec(ymat)
   if (sum(is.na(yvec)) > 0) {
     yvec2 <- yvec[!is.na(yvec)]
     dmat2 <- dmat[!is.na(yvec), ]
     modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
-  }else{
-    modNoIntercept <- lm(yvec ~ dmat + 0) 
   }
-  vecBhat <- Rmat %*% coef(modNoIntercept)
-  Bhat <- matrix(vecBhat, nrow = nnodes)
-  Uhat <- ymat - Bhat %*% Zmat
-  Uhat[is.na(Uhat)] <- 0
-  modBIC <- log(det((1/nrow(vts)) * Uhat %*% t(Uhat))) + (1/nrow(vts)) * 
-    length(coef(modNoIntercept)) * log(nrow(vts)) 
-  # If mostly NAs, this gets too small? But not working for fivenet
-  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic, BIC = modBIC)
+  else {
+    modNoIntercept <- lm(yvec ~ dmat + 0)
+  }
+  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic)
   class(out) <- "GNARXfit"
   return(out)
 }
 
-# --------------------------------------------------------------------------------------------
 
-GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, alphaOrder = 2, 
-                        betaOrder = c(1, 1), lambdaOrder = NULL, fact.var = NULL, globalalpha = FALSE, 
-                        tvnets = NULL, netsstart = NULL) 
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+
+GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
+                         betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
+                         tvnets = NULL, netsstart = NULL, xvts = NULL, lambdaOrder = NULL) 
 {
   stopifnot(is.GNARnet(net))
   stopifnot(ncol(vts) == length(net$edges))
@@ -131,172 +137,224 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, net = GNAR::fiveNet, 
     cat("Time-varying networks not yet supported")
   }
   stopifnot(is.null(tvnets))
-  if(is.null(xvts)){
-    lambdaOrder <- NULL
+  if(is.null(lambdaOrder)){
+    if(!is.null(xvts)){
+      stop("lambdaOrder must be specified when xvts is provided")
+    }else{
+      maxOrder <- alphaOrder
+    }
   }else{
-    if(is.null(lambdaOrder)){
-      stop("lambdaOrder must be non-null if xvts is non-null")
+    if(nrow(xvts) != nrow(vts)){
+      stop("xvts and vts must have the same time range")
     }else{
       if(lambdaOrder%%1 != 0 || lambdaOrder < 0){
         stop("lambdaOrder must be a non-negative integer")
+      }else{
+        maxOrder <- max(alphaOrder, lambdaOrder)
       }
     }
   }
-  if(!is.null(xvts)){
-    if(nrow(vts) != nrow(xvts)){
-      stop("vts and xvts must have the same time dimension")
-    }
+  netmat <- as.matrix(net, normalise = FALSE)
+  if (!isSymmetric(netmat)) {
+    net <- as.GNARnet(t(netmat))
   }
   parNames <- parLoc <- NULL
-  for (jj in 1:alphaOrder) {                                  # For j in 1:p
-    if (globalalpha) {                                        
+  for (jj in 1:alphaOrder) {
+    if (globalalpha) {
       parNames <- c(parNames, paste("alpha", jj, sep = ""))
       parLoc <- c(parLoc, "a")
     }
     else {
-      for (kk in 1:ncol(vts)) {                               # For i in 1:N
-        parNames <- c(parNames, paste("alpha", jj, "node",    
+      for (kk in 1:ncol(vts)) {
+        parNames <- c(parNames, paste("alpha", jj, "node", 
                                       kk, sep = ""))
-        parLoc <- c(parLoc, "a")                              
+        parLoc <- c(parLoc, "a")
       }
     }
-    if (betaOrder[jj] > 0) {                                  # If s_j>0
-      for (kk in 1:betaOrder[jj]) {                           # For r in 1:s_j
-        parNames <- c(parNames, paste("beta", jj, ".",        
-                                      kk, sep = ""))          # E.g. parNames = c("alpha1node1", ..., "alpha1node5", "beta1.1", "alpha2node1", ..., "alpha2node5", "beta2.1")
-        parLoc <- c(parLoc, "b")                              # E.g. parLoc = c("a", ..., "a", "b", "a", ..., "a", "b")
+    if (betaOrder[jj] > 0) {
+      for (kk in 1:betaOrder[jj]) {
+        parNames <- c(parNames, paste("beta", jj, ".", 
+                                      kk, sep = ""))
+        parLoc <- c(parLoc, "b")
       }
     }
   }
-  maxOrder <- alphaOrder
   if(!is.null(lambdaOrder)){
     for(ii in 0:lambdaOrder){
       parNames <- c(parNames, paste("lambda", ii, sep = ""))
       parLoc <- c(parLoc, "l") 
     }
-    maxOrder <- max(alphaOrder, lambdaOrder)
   }
-  predt <- nrow(vts) - maxOrder                             
+  predt <- nrow(vts) - maxOrder
   nnodes <- ncol(vts)
-  Zmat <- t(vts[maxOrder:(nrow(vts)-1),])
-  if(alphaOrder > 1){
-    for(ii in 1:(alphaOrder-1)){
-      Zmat <- rbind(Zmat, t(vts[(maxOrder-ii):(nrow(vts)-1-ii),]))
-    }
+  if (globalalpha) {
+    dmat <- matrix(0, nrow = predt * nnodes, ncol = length(parLoc), 
+                   dimnames = list(NULL, parNames))
+  }else {
+    dmat <- matrix(0, nrow = predt * nnodes, ncol = length(parLoc), 
+                   dimnames = list(NULL, parNames))
   }
-  if(!is.null(lambdaOrder)){
-    for(jj in 1:(lambdaOrder + 1)){
-      Zmat <- rbind(Zmat, t(xvts[(maxOrder+2-jj):(nrow(xvts)+1-jj),]))
-    }
-  }
-  Lmat <- matrix(0, ncol=1, nrow=nnodes^2)
-  ii2 <- 1
-  for(ii in 1:nnodes){
-    Lmat[ii2,1] <- 1
-    ii2 <- ii2 + nnodes + 1
-  }
-  if(globalalpha == FALSE){
-    Amat <- matrix(0, ncol=nnodes, nrow=1)
-    Amat[1, 1] <- 1
-    for(ii in 2:nnodes){
-      Amat <- rbind(Amat, matrix(0, nnodes, nnodes))
-      Amat2 <- matrix(0, ncol=nnodes, nrow=1)
-      Amat2[1, ii] <- 1
-      Amat <- rbind(Amat, Amat2)
-    }
-  }else{
-    Amat <- Lmat
-  }
-  Rkmatlist <- list()
-  for(ii in 1:alphaOrder){
-    if(betaOrder[ii]!=0){
-      Rkmat <- vec(as.matrix(net, stage = 1, normalise = TRUE))
-      if(betaOrder[ii] > 1){
-        for(jj in 2:betaOrder[ii]){
-          Rkmat <- cbind(Rkmat, vec(as.matrix(net, stage = jj, normalise = TRUE)))
-        }
+  for (ii in 1:nnodes) {
+    for (aa in 1:alphaOrder) {
+      if (globalalpha) {
+        alphaLoc <- which(parLoc == "a")[aa]
+      } else {
+        alphaLoc <- which(parLoc == "a")[nnodes * (aa - 1) + ii]
       }
-      Rkmatlist[[ii]] <- Rkmat
+      dmat[((predt * (ii - 1) + 1):(predt * ii)), alphaLoc] <- 
+        vts[((maxOrder + 1 - aa):(predt + (maxOrder - aa))), ii]
     }
   }
-  if(!is.null(lambdaOrder)){
-    Rmat <- matrix(0, nrow = (nnodes^2 * (alphaOrder + lambdaOrder + 1)), ncol = length(parLoc))
-  }else{
-    Rmat <- matrix(0, nrow = (nnodes^2 * alphaOrder), ncol = length(parLoc))
-  }
-  rowStart <- 1
-  rowEnd <- nnodes^2
-  colStart <- 1
-  if(globalalpha == FALSE){
-    colEnd <- nnodes + betaOrder[1]
-    if(betaOrder[1] == 0){
-      Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
-    }else{
-      Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
-    }
-    if(alphaOrder > 1){
-      for(ii in 2:alphaOrder){
-        rowStart <- rowEnd + 1
-        rowEnd <- rowEnd + nnodes^2
-        colStart <- colEnd + 1
-        colEnd <- colEnd + nnodes + betaOrder[ii]
-        if(betaOrder[ii] == 0){
-          Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
-        }else{
-          Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
-        }
+  if (sum(betaOrder) > 0) {
+    betaN <- NULL
+    betaTimes <- rep(1:alphaOrder, betaOrder)
+    for (jj in 1:alphaOrder) {
+      if (betaOrder[jj] > 0) {
+        betaN <- c(betaN, 1:betaOrder[jj])
       }
     }
-    if(!is.null(lambdaOrder)){
-      rowStart <- rowEnd + 1
-      rowEnd <- rowStart + nnodes^2 - 1
-      colStart <- colEnd + 1
-      Rmat[rowStart:rowEnd, colStart] <- Lmat
-      if(lambdaOrder > 0){
-        for(jj in 1:lambdaOrder){
-          rowStart <- rowEnd + 1
-          rowEnd <- rowStart + nnodes^2 - 1
-          colStart <- colStart + 1
-          Rmat[rowStart:rowEnd, colStart] <- Lmat
+    for (ii in 1:nnodes) {
+      NofNei <- NofNeighbours(node = ii, stage = max(betaOrder), net = net)
+      Nei <- NofNei$edges
+      Wei <- NofNei$dist
+      if ((!is.null(Nei)) & (length(Nei) > 0)) {
+        if (!is.null(Nei[[1]]) & !is.na(Nei[[1]][1])) {
+          Wei <- lapply(Wei, function(x) {
+            1/(x * sum(1/x))
+          })
+          for (bb in 1:sum(betaOrder)) {
+            betaLoc <- which(parLoc == "b")[bb]
+            if (length(Nei[[betaN[bb]]]) > 1) {
+              vts.cut <- vts[((maxOrder + 1 - betaTimes[bb]):
+                                (predt + (maxOrder - betaTimes[bb]))), Nei[[betaN[bb]]]]
+              for (kk in 1:nrow(vts.cut)) {
+                if (any(is.na(vts.cut[kk, ]))) {
+                  if (all(is.na(vts.cut[kk, ]))) {
+                    vts.cut[kk, ] <- 0
+                  } else {
+                    new.wei <- Wei[[betaN[bb]]][which(!is.na(vts.cut[kk, ]))]
+                    new.wei <- new.wei/sum(new.wei)
+                    sub.val <- vts.cut[kk, which(!is.na(vts.cut[kk, ]))] %*% new.wei
+                    vts.cut[kk, which(is.na(vts.cut[kk, ]))] <- sub.val
+                  }
+                }
+              }
+              dmat[((predt * (ii - 1) + 1):(predt * ii)), 
+                   betaLoc] <- vts.cut %*% Wei[[betaN[bb]]]
+            } else {
+              if ((length(Nei[[betaN[bb]]]) == 1) & (!is.na(Nei[[betaN[bb]]]))) {
+                vts.cut <- vts[((maxOrder + 1 - betaTimes[bb]):
+                                  (predt + (maxOrder - betaTimes[bb]))), Nei[[betaN[bb]]]]
+                vts.cut[is.na(vts.cut)] <- 0
+                dmat[((predt * (ii - 1) + 1):(predt * ii)), betaLoc] <- vts.cut * 
+                  Wei[[betaN[bb]]]
+              } else {
+                dmat[((predt * (ii - 1) + 1):(predt * ii)), betaLoc] <- 0
+              }
+            }
+          }
+        } else {
+          for (bb in 1:sum(betaOrder)) {
+            betaLoc <- which(parLoc == "b")[bb]
+            dmat[((predt * (ii - 1) + 1):(predt * ii)), betaLoc] <- 0
+          }
         }
-      }
-    }
-  }else{
-    colEnd <- 1 + betaOrder[1]
-    if(betaOrder[1] == 0){
-      Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
-    }else{
-      Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[1]])
-    }
-    if(alphaOrder > 1){
-      for(ii in 2:alphaOrder){
-        rowStart <- rowEnd + 1
-        rowEnd <- rowEnd + nnodes^2
-        colStart <- colEnd + 1
-        colEnd <- colEnd + 1 + betaOrder[ii]
-        if(betaOrder[ii] == 0){
-          Rmat[rowStart:rowEnd, colStart:colEnd] <- Amat
-        }else{
-          Rmat[rowStart:rowEnd, colStart:colEnd] <- cbind(Amat, Rkmatlist[[ii]])
-        }
-      }
-    }
-    if(!is.null(lambdaOrder)){
-      rowStart <- rowEnd + 1
-      rowEnd <- rowStart + nnodes^2 - 1
-      colStart <- colEnd + 1
-      Rmat[rowStart:rowEnd, colStart] <- Lmat
-      if(lambdaOrder > 0){
-        for(jj in 1:lambdaOrder){
-          rowStart <- rowEnd + 1
-          rowEnd <- rowStart + nnodes^2 - 1
-          colStart <- colStart + 1
-          Rmat[rowStart:rowEnd, colStart] <- Lmat
+      } else {
+        for (bb in 1:sum(betaOrder)) {
+          betaLoc <- which(parLoc == "b")[bb]
+          dmat[((predt * (ii - 1) + 1):(predt * ii)), betaLoc] <- 0
         }
       }
     }
   }
-  dmat <- (t(Zmat) %x% diag(nnodes)) %*% Rmat
-  colnames(dmat) <- parNames
-  return(list(dmat, Rmat, Zmat))
+  if(!is.null(xvts)){
+    for(jj in 0:lambdaOrder){
+        dmat[, ncol(dmat) - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+                                                            (nrow(xvts) - jj), ])
+    }
+  }
+  if (is.null(fact.var)) {
+    return(dmat)
+  } else {
+    stop("Non-null fact.var has not been implemented for GNARX")
+    facun <- unique(fact.var)
+    if (length(facun) == 1) {
+      return(dmat)
+    } else {
+      dmcol <- ncol(dmat)
+      dmatex <- dmat
+      exnames <- paste(colnames(dmat), " '", facun[1], "'", sep = "")
+      for (ii in 2:length(facun)) {
+        dmatex <- cbind(dmatex, dmat)
+        exnames <- c(exnames, paste(colnames(dmat), " '", facun[ii], "'", sep = ""))
+      }
+      for (ii in 1:length(facun)) {
+        dmatex[fact.var != facun[ii], ((ii - 1) * dmcol + (1:dmcol))] <- 0
+      }
+      colnames(dmatex) <- exnames
+      return(dmatex)
+    }
+  }
 }
+
+
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+
+BIC.GNARXfit <- function (object, ...) 
+{
+  stopifnot(is.GNARfit(object))
+  nnodes.in <- object$frbic$nnodes
+  alphas.in <- object$frbic$alphas.in
+  betas.in <- object$frbic$betas.in
+  lambdas.in <- object$frbic$lambdas.in
+  fact.var <- object$frbic$fact.var
+  tot.time <- object$frbic$time.in
+  globalalpha <- object$frbic$globalalpha
+  dotarg <- list(...)
+  if (length(dotarg) != 0) {
+    if (!is.null(names(dotarg))) {
+      warning("... not used here, input(s) ", paste(names(dotarg), 
+                                                    collapse = ", "), " ignored")
+    }
+    else {
+      warning("... not used here, input(s) ", paste(dotarg, 
+                                                    collapse = ", "), " ignored")
+    }
+  }
+  if (!is.null(fact.var)) {
+    f.in <- length(unique(fact.var))
+  } else {
+    f.in <- 1
+  }
+  stopifnot(is.logical(globalalpha))
+  stopifnot(length(nnodes.in) == 1)
+  stopifnot(floor(nnodes.in) == nnodes.in)
+  stopifnot(tot.time != 0)
+  tmp.resid <- residToMat(GNARobj = object, nnodes = nnodes.in)$resid
+  tmp.resid[is.na(tmp.resid)] <- 0
+  larg <- det((1/tot.time) * t(tmp.resid) %*% tmp.resid)
+  stopifnot(larg != 0)
+  tmp1 <- log(larg)
+  if(!is.null(lambdas.in)){
+    if (globalalpha) {
+      tmp2 <- f.in * (alphas.in + sum(betas.in) + lambdas.in + 1) * log(tot.time)/tot.time
+    }else {
+      tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in) + lambdas.in + 1) * 
+        log(tot.time)/tot.time
+    }
+  }else{
+    if (globalalpha) {
+      tmp2 <- f.in * (alphas.in + sum(betas.in)) * log(tot.time)/tot.time
+    }else {
+      tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in)) * 
+        log(tot.time)/tot.time
+    }
+  }
+  return(tmp1 + tmp2)
+}
+  
+  
