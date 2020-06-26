@@ -335,7 +335,11 @@ BIC.GNARXfit <- function (object, ...)
   stopifnot(floor(nnodes.in) == nnodes.in)
   stopifnot(tot.time != 0)
   tmp.resid <- residToMat(GNARobj = object, nnodes = nnodes.in)$resid
-  tmp.resid[is.na(tmp.resid)] <- 0
+  # tmp.resid[is.na(tmp.resid)] <- 0
+  replace.resid.len <- sum(is.na(tmp.resid))
+  replace.resid <- rnorm(n = replace.resid.len, mean = mean(tmp.resid, na.rm = TRUE),
+                         sd = sd(tmp.resid, na.rm = TRUE))
+  tmp.resid[is.na(tmp.resid)] <- replace.resid
   larg <- det((1/tot.time) * t(tmp.resid) %*% tmp.resid)
   stopifnot(larg != 0)
   tmp1 <- log(larg)
