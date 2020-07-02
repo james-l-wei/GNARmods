@@ -1,31 +1,16 @@
+# This file contains code for the following functions:
+# 1) GNARXfit: fits the GNARX model via OLS, allowing for +ve coefficient sign restriction
+# 2) GNARXdesign: creates the design matrix for the OLS regression in GNARXfit
+# 3) GNARXorder: computes the optimum GNARX model order based on greedy BIC optimisation
+# 4) oneStepMSFE: computes the one-step ahead OOS MSFE for a given GNARX specification*
+# 5) GNARXpredict: computes the one-step ahead prediction for a given GNARX specification*
+# 6) VAR.oneStepMSFE: computes the one-step ahead OOS MSFE for a given VAR specification
+# 7) inSampleError: computes the in-sample MSE for a given GNARX specification*2
+# * Haven't yet been tested with a non-null xvts parameter
+# *2 Doesn't yet work with positive coefficient restriction; need to remove first coefficient
+
 library(matrixcalc)
 library(GNAR)
-
-# Line-by-line test conditions
-vts = PMIData
-net = NNTradeNet
-alphaOrder = 1 # 222
-betaOrder = rep(0, 1)
-fact.var = NULL
-globalalpha = TRUE
-xvts = NULL
-lambdaOrder = NULL
-
-# Comparisons with GNARfit
-# alphaOrder = 1, betaOrder = 0, globalalpha = TRUE
-# alphaOrder = 2, betaOrder = c(0, 0), globalalpha = TRUE
-# alphaOrder = 2, betaOrder = c(2, 1), globalalpha = TRUE
-# alphaOrder = 1, betaOrder = 0, globalalpha = FALSE
-# alphaOrder = 2, betaOrder = c(0, 0), globalalpha = FALSE
-# alphaOrder = 2, betaOrder = c(2, 1), globalalpha = FALSE
-# BIC.GNARXfit(GNARXfit(vts = PMIData, net = NNTradeNet, alphaOrder = 2, betaOrder = c(2,1), 
-#                       globalalpha = FALSE)) - BIC(GNARfit(vts = PMIData, 
-#                                                                   net = NNTradeNet, 
-#                                                                   alphaOrder = 2, 
-#                                                           betaOrder = c(2,1),
-#                                                                   globalalpha = FALSE))
-
-
 
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
@@ -36,7 +21,7 @@ lambdaOrder = NULL
 GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
                       betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
                       tvnets = NULL, netsstart = NULL, ErrorIfNoNei = TRUE, 
-                      xvts = NULL, lambdaOrder = NULL) 
+                      xvts = NULL, lambdaOrder = NULL, positiveCoef = FALSE) 
 {
   stopifnot(is.GNARnet(net))
   stopifnot(ncol(vts) == length(net$edges))
@@ -75,7 +60,7 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
                 betas.in = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
                 xtsp = tsp(vts), time.in = nrow(vts), net.in = net, 
                 final.in = vts[(nrow(vts) - maxOrder + 1):nrow(vts), ], 
-                lambdas.in = lambdaOrder)
+                lambdas.in = lambdaOrder, positiveCoef = positiveCoef)
   dmat <- GNARXdesign(vts = vts, net = net, alphaOrder = alphaOrder, 
                      betaOrder = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
                      tvnets = tvnets, netsstart = netsstart, 
@@ -89,7 +74,7 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
            betastage)
     }
   }
-  predt <- nrow(vts) - alphaOrder
+  predt <- nrow(vts) - maxOrder
   yvec <- NULL
   for (ii in 1:length(net$edges)) {
     yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), 
@@ -105,9 +90,22 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
     }
     yvec2 <- yvec2[!is.na(yvec2)]
   }
-  modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
-  fgls <- lm(yvec2 ~ dmat2 + 0, weights = 1/modNoIntercept$fitted.values^2)
-  out <- list(mod = fgls, y = yvec, dd = dmat, frbic = frbic)
+  if(positiveCoef == FALSE){
+    modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
+    modBIC <- BIC(modNoIntercept)
+  }else{
+    if(is.null(dim(dmat2))){
+      modNoIntercept <- lm(yvec2 ~ dmat2 + 0)
+      modBIC <- NA
+    }else{
+      modNoIntercept <- glmnet(dmat2, yvec2, lambda = 0, lower.limits = 0, intercept = FALSE)
+      tLL <- modNoIntercept$nulldev - deviance(modNoIntercept)
+      k <- modNoIntercept$df
+      n <- modNoIntercept$nobs
+      modBIC <- log(n) * k - tLL
+    }
+  }
+  out <- list(mod = modNoIntercept, y = yvec, dd = dmat, frbic = frbic, BIC = modBIC)
   class(out) <- "GNARXfit"
   return(out)
 }
@@ -302,71 +300,172 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
 }
 
 
-# ------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
 
-# Obsolete: just use the lm model to compute BIC
-# BIC.GNARXfit <- function (object, ...) 
-# {
-#   stopifnot(is.GNARfit(object))
-#   nnodes.in <- object$frbic$nnodes
-#   alphas.in <- object$frbic$alphas.in
-#   betas.in <- object$frbic$betas.in
-#   lambdas.in <- object$frbic$lambdas.in
-#   fact.var <- object$frbic$fact.var
-#   tot.time <- object$frbic$time.in
-#   globalalpha <- object$frbic$globalalpha
-#   modLogLik <- logLik(object$mod)
-#   dotarg <- list(...)
-#   if (length(dotarg) != 0) {
-#     if (!is.null(names(dotarg))) {
-#       warning("... not used here, input(s) ", paste(names(dotarg), 
-#                                                     collapse = ", "), " ignored")
-#     }
-#     else {
-#       warning("... not used here, input(s) ", paste(dotarg, 
-#                                                     collapse = ", "), " ignored")
-#     }
-#   }
-#   if (!is.null(fact.var)) {
-#     f.in <- length(unique(fact.var))
-#   } else {
-#     f.in <- 1
-#   }
-#   stopifnot(is.logical(globalalpha))
-#   stopifnot(length(nnodes.in) == 1)
-#   stopifnot(floor(nnodes.in) == nnodes.in)
-#   stopifnot(tot.time != 0)
-#   tmp.resid <- residToMat(GNARobj = object, nnodes = nnodes.in)$resid
-#   # tmp.resid[is.na(tmp.resid)] <- 0
-#   
-#   # replace.resid.len <- sum(is.na(tmp.resid))
-#   # replace.resid <- rnorm(n = replace.resid.len, mean = mean(tmp.resid, na.rm = TRUE),
-#   #                        sd = sd(tmp.resid, na.rm = TRUE))
-#   # tmp.resid[is.na(tmp.resid)] <- replace.resid
-#   
-#   larg <- det((1/tot.time) * t(tmp.resid) %*% tmp.resid)
-#   stopifnot(larg != 0)
-#   tmp1 <- log(larg)
-#   if(!is.null(lambdas.in)){
-#     if (globalalpha) {
-#       tmp2 <- f.in * (alphas.in + sum(betas.in) + lambdas.in + 1) * log(tot.time)/tot.time
-#     }else {
-#       tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in) + lambdas.in + 1) * 
-#         log(tot.time)/tot.time
-#     }
-#   }else{
-#     if (globalalpha) {
-#       tmp2 <- f.in * (alphas.in + sum(betas.in)) * log(tot.time)/tot.time
-#     }else {
-#       tmp2 <- (ncol(tmp.resid) * alphas.in + sum(betas.in)) * 
-#         log(tot.time)/tot.time
-#     }
-#   }
-#   return(tmp1 + tmp2)
-# }
-  
-  
+GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim, 
+                       positiveCoef = FALSE){
+  if(is.null(xvts)){
+    bestLambda <- NULL
+  }else{
+    bestLambda <- 0
+  }
+  if(positiveCoef){
+    bestAlpha <- 1
+    newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = 2, 
+                       betaOrder = c(0,0), globalalpha = globalalpha, xvts = xvts, 
+                       lambdaOrder = bestLambda, positiveCoef = positiveCoef)$BIC
+    bestBIC <- newBIC + 1
+  }else{
+    bestAlpha <- 0
+    newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = 1, 
+                       betaOrder = 0, globalalpha = globalalpha, xvts = xvts, 
+                       lambdaOrder = bestLambda, positiveCoef = positiveCoef)$BIC
+    bestBIC <- newBIC + 1
+  }
+  while(newBIC < bestBIC & bestAlpha < alphaLim){ # alpha search
+    bestBIC <- newBIC
+    bestAlpha <- bestAlpha + 1
+    newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha + 1, 
+                       betaOrder = rep(0, bestAlpha + 1), globalalpha = globalalpha, 
+                       xvts = xvts, lambdaOrder = bestLambda, 
+                       positiveCoef = positiveCoef)$BIC
+  }
+  bestBeta <- rep(0, bestAlpha)
+  bestBeta[1] <- -1 
+  for(i in 1:bestAlpha){
+    newBIC <- bestBIC
+    bestBIC <- newBIC + 1
+    while(newBIC < bestBIC){ # beta search
+      bestBIC <- newBIC
+      bestBeta[i] <- bestBeta[i] + 1
+      newBeta <- bestBeta
+      newBeta[i] <- bestBeta[i] + 1
+      newBIC <- try(GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha, 
+                             betaOrder = newBeta, globalalpha = globalalpha, 
+                             xvts = xvts, lambdaOrder = bestLambda, 
+                             positiveCoef = positiveCoef)$BIC, silent = TRUE)
+      if(inherits(newBIC, "try-error")){
+        newBIC <- bestBIC + 1
+      }
+    }
+    if(bestAlpha >= i+1){
+      bestBeta[i+1] <- -1 
+    }
+  }
+  if(is.null(xvts)){
+    bestOrder <- list(bestBIC = bestBIC, bestAlpha = bestAlpha, bestBeta = bestBeta)
+  }else{
+    newBIC <- bestBIC
+    bestBIC <- newBIC + 1
+    bestLambda <- -1
+    while(newBIC < bestBIC & bestLambda < lambdaLim){ # lambda search
+      bestBIC <- newBIC
+      bestLambda <- bestLambda + 1
+      newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha, 
+                         betaOrder = bestBeta, globalalpha = globalalpha, 
+                         xvts = xvts, lambdaOrder = bestLambda + 1, 
+                         positiveCoef = positiveCoef)$BIC
+    }
+    bestOrder <- list(bestBIC = bestBIC, bestAlpha = bestAlpha, bestBeta = bestBeta, 
+                      bestLambda = bestLambda)
+  }
+  return(bestOrder)
+}
+
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+
+oneStepMSFE <- function(old.vts, old.xvts = NULL, new.vts, new.xvts = NULL, net, 
+                        globalalpha, alphaOrder, betaOrder, lambdaOrder = NULL, 
+                        positiveCoef = FALSE){
+  noPreds <- nrow(new.vts) - nrow(old.vts)
+  predMat <- matrix(NA, nrow = noPreds, ncol = ncol(old.vts))
+  for(i in 1:noPreds){
+    if(is.null(old.xvts)){
+      fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], net = net, 
+                      alphaOrder = alphaOrder, betaOrder = betaOrder,
+                      globalalpha = globalalpha, xvts = NULL, 
+                      lambdaOrder = NULL, positiveCoef = positiveCoef)
+    }else{
+      fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], net = net, 
+                      alphaOrder = alphaOrder, betaOrder = betaOrder,
+                      globalalpha = globalalpha, xvts = new.xvts[1:(nrow(old.xvts) + i - 1),], 
+                      lambdaOrder = lambdaOrder, positiveCoef = positiveCoef)
+    }
+    predMat[i, ] <- GNARXpredict(fit = fit, new.vts = new.vts[1:(nrow(old.vts) + i),]) 
+  }
+  MSFE <- mean((predMat - new.vts[(nrow(old.vts) + 1):nrow(new.vts),])^2, na.rm = TRUE)
+  return(list(MSFE = MSFE, predMat = predMat))
+}
+
+
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+
+GNARXpredict <- function(fit, new.vts, new.xvts = NULL){
+  nnodes <- fit$frbic$nnodes
+  dmat <- GNARXdesign(vts = new.vts, net = fit$frbic$net.in, alphaOrder = fit$frbic$alphas.in, 
+                      betaOrder = fit$frbic$betas.in, fact.var = fit$frbic$fact.var, 
+                      globalalpha = fit$frbic$globalalpha, tvnets = fit$frbic$tvnets, 
+                      netsstart = fit$frbic$netsstart, xvts = new.xvts, 
+                      lambdaOrder = fit$frbic$lambdas.in)
+  gammaHat <- coef(fit$mod)
+  if(fit$frbic$positiveCoef){
+    gammaHat <- gammaHat[-1, ]
+  }
+  yvecHat <- dmat %*% gammaHat
+  yvec <- matrix(yvecHat, nrow = length(yvecHat) / nnodes, ncol = nnodes)
+  predictions <- tail(yvec, 1)
+  return(predictions)
+}
+
+
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+
+VAR.oneStepMSFE <- function(old.vts, new.vts, order){
+  old.vts <- old.vts[complete.cases(old.vts), ]
+  new.vts <- new.vts[complete.cases(new.vts), ]
+  noPreds <- nrow(new.vts) - nrow(old.vts)
+  predMat <- matrix(NA, nrow = noPreds, ncol = ncol(old.vts))
+  for(i in 1:noPreds){
+    fit <- VAR(new.vts[1:(nrow(old.vts) + i - 1),], p = order, include.mean = FALSE,
+               output = FALSE)
+    predMat[i, ] <- VARpred(fit, h=1)$pred
+  }
+  MSFE <- mean((predMat - new.vts[(nrow(old.vts) + 1):nrow(new.vts),])^2, na.rm = TRUE)
+  return(list(MSFE = MSFE, predMat = predMat))
+}
+
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+
+inSampleError <- function(vts, net, alphaOrder, betaOrder, globalalpha, 
+                          xvts, lambdaOrder, positiveCoef){
+  if(positiveCoef){
+    stop("positiveCoef = TRUE not supported; need to remove intercept")
+  }
+  nnodes <- ncol(vts)
+  mod <- GNARXfit(vts = vts, net = net, alphaOrder = alphaOrder, betaOrder = betaOrder,
+                  globalalpha = globalalpha, xvts = xvts, lambdaOrder = lambdaOrder,
+                  positiveCoef = positiveCoef)
+  fittedVals <- mod$dd %*% coef(mod$mod)
+  fittedVals <- matrix(fittedVals, ncol = nnodes)
+  MSE <- mean((fittedVals - tail(vts, nrow(fittedVals)))^2, na.rm = TRUE)
+}
