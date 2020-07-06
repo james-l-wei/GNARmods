@@ -41,99 +41,75 @@ stringencyDataNoAUS <- stringencyData[,-12]
 # c) Positive coefficients method
 
 aGNAR1order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = TRUE, 
-                         xvts = NULL, alphaLim = 12, lambdaLim = 3)
+                         alphaLim = 12)
 aGNAR2order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = TRUE, 
-                         xvts = NULL, alphaLim = 12, lambdaLim = 3)
+                         alphaLim = 12)
 aGNAR3order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = FALSE, 
-                         xvts = NULL, alphaLim = 12, lambdaLim = 3)
+                         alphaLim = 12)
 aGNAR4order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = FALSE, 
-                         xvts = NULL, alphaLim = 12, lambdaLim = 3)
+                         alphaLim = 12)
 
 pacf(na.omit(PMIDataNoAUSInSample[,1]))
 adf.test(na.omit(PMIDataNoAUSInSample[,1]))
 bGNAR1order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = TRUE, 
-                          xvts = NULL, alphaLim = 1, lambdaLim = 3)
+                          alphaLim = 1)
 bGNAR2order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = TRUE, 
-                          xvts = NULL, alphaLim = 1, lambdaLim = 3)
+                          alphaLim = 1)
 bGNAR3order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = FALSE, 
-                          xvts = NULL, alphaLim = 1, lambdaLim = 3)
+                          alphaLim = 1)
 bGNAR4order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = FALSE, 
-                          xvts = NULL, alphaLim = 1, lambdaLim = 3)
+                          alphaLim = 1)
 
 cGNAR1order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = TRUE, 
-                          xvts = NULL, alphaLim = 12, lambdaLim = 3, positiveCoef = TRUE)
+                          alphaLim = 12, positiveCoef = TRUE)
 cGNAR2order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = TRUE, 
-                          xvts = NULL, alphaLim = 12, lambdaLim = 3, positiveCoef = TRUE)
+                          alphaLim = 12, positiveCoef = TRUE)
 cGNAR3order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, globalalpha = FALSE, 
-                          xvts = NULL, alphaLim = 12, lambdaLim = 3, positiveCoef = TRUE)
+                          alphaLim = 12, positiveCoef = TRUE)
 cGNAR4order <- GNARXOrder(vts = PMIDataNoAUSInSample, net = NNTradeNetNoAUS, globalalpha = FALSE, 
-                          xvts = NULL, alphaLim = 12, lambdaLim = 3, positiveCoef = TRUE)
+                          alphaLim = 12, positiveCoef = TRUE)
 
 VAR1order <- VARorder(x = PMIDataNoAUSInSample[complete.cases(PMIDataNoAUSInSample),], maxp = 5,
                       output = F)
 
-aGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                        new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                        globalalpha = TRUE, alphaOrder = 12, 
-                        betaOrder = c(1,1,1,1,0,0,0,0,0,0,0,0), lambdaOrder = NULL, 
-                        positiveCoef = FALSE)
-aGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net =NNTradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 12, 
-                          betaOrder = c(0,0,0,0,0,0,0,0,0,0,0,0), lambdaOrder = NULL, 
-                          positiveCoef = FALSE)
-aGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 1, 
-                          betaOrder = 1, lambdaOrder = NULL, 
-                          positiveCoef = FALSE) 
-aGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = NNTradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 1, 
-                          betaOrder = 1, lambdaOrder = NULL, 
-                          positiveCoef = FALSE) 
+aGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = TRUE, alphaOrder = 12, 
+                          betaOrder = c(1,1,1,1,0,0,0,0,0,0,0,0), positiveCoef = FALSE)
+aGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = NNTradeNetNoAUS, globalalpha = TRUE, alphaOrder = 12, 
+                          betaOrder = c(0,0,0,0,0,0,0,0,0,0,0,0), positiveCoef = FALSE)
+aGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = FALSE, alphaOrder = 1, 
+                          betaOrder = 1, positiveCoef = FALSE) 
+aGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = NNTradeNetNoAUS, globalalpha = FALSE, alphaOrder = 1, 
+                          betaOrder = 1, positiveCoef = FALSE) 
 
-bGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 1, 
-                          betaOrder = 1, lambdaOrder = NULL, 
-                          positiveCoef = FALSE)
-bGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net =NNTradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 1, 
-                          betaOrder = 0, lambdaOrder = NULL, 
-                          positiveCoef = FALSE)
-bGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 1, 
-                          betaOrder = 1, lambdaOrder = NULL, 
-                          positiveCoef = FALSE) 
-bGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = NNTradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 1, 
-                          betaOrder = 1, lambdaOrder = NULL, 
-                          positiveCoef = FALSE) 
+bGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = TRUE, alphaOrder = 1, 
+                          betaOrder = 1, positiveCoef = FALSE)
+bGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net =NNTradeNetNoAUS, globalalpha = TRUE, alphaOrder = 1, 
+                          betaOrder = 0, positiveCoef = FALSE)
+bGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = FALSE, alphaOrder = 1, 
+                          betaOrder = 1, positiveCoef = FALSE) 
+bGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = NNTradeNetNoAUS, globalalpha = FALSE, alphaOrder = 1, 
+                          betaOrder = 1, positiveCoef = FALSE) 
 
-cGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 2, 
-                          betaOrder = c(1,0), lambdaOrder = NULL, 
-                          positiveCoef = TRUE)
-cGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net =NNTradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 2, 
-                          betaOrder = c(1,0), lambdaOrder = NULL, 
-                          positiveCoef = TRUE)
-cGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 2, 
-                          betaOrder = c(1,0), lambdaOrder = NULL, 
-                          positiveCoef = TRUE) 
-cGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = NNTradeNetNoAUS, 
-                          globalalpha = FALSE, alphaOrder = 2, 
-                          betaOrder = c(1,0), lambdaOrder = NULL, 
-                          positiveCoef = TRUE)
+cGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = TRUE, alphaOrder = 2, 
+                          betaOrder = c(1,0), positiveCoef = TRUE)
+cGNAR2MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net =NNTradeNetNoAUS, globalalpha = TRUE, alphaOrder = 2, 
+                          betaOrder = c(1,0), positiveCoef = TRUE)
+cGNAR3MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = FALSE, alphaOrder = 2, 
+                          betaOrder = c(1,0), positiveCoef = TRUE) 
+cGNAR4MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = NNTradeNetNoAUS, globalalpha = FALSE, alphaOrder = 2, 
+                          betaOrder = c(1,0), positiveCoef = TRUE)
 
 VARMSFE <- VAR.oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, order = 2)
 
@@ -172,9 +148,7 @@ mean((TrueSeries - TrueSeriesLagged)^2, na.rm = TRUE)
 GNARRegTable <- summary(GNARXfit(vts = PMIDataNoAUSInSample, net = tradeNetNoAUS, alphaOrder = 2, 
                                  betaOrder = c(1,0), positiveCoef = TRUE)$mod)
 
-cGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, old.xvts = NULL, 
-                          new.vts = PMIDataNoAUS, new.xvts = NULL, net = tradeNetNoAUS, 
-                          globalalpha = TRUE, alphaOrder = 2, 
-                          betaOrder = c(1,0), lambdaOrder = NULL, 
-                          positiveCoef = TRUE)
+cGNAR1MSFE <- oneStepMSFE(old.vts = PMIDataNoAUSInSample, new.vts = PMIDataNoAUS, 
+                          net = tradeNetNoAUS, globalalpha = TRUE, alphaOrder = 2, 
+                          betaOrder = c(1,0), positiveCoef = TRUE)
     
