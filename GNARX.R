@@ -428,6 +428,8 @@ GNARXOrder <- function(vts, xvts = NULL, xvts2 = NULL, net, alphaLim,
                            positiveCoef = positiveCoef, xvts2 = xvts2,
                            lambdaOrder2 = bestLambda2 + 1)$BIC
       }
+      bestOrder <- list(bestBIC = bestBIC, bestAlpha = bestAlpha, bestBeta = bestBeta, 
+                        bestLambda = bestLambda, bestLambda2 = bestLambda2)
     }
   }
   return(bestOrder)
