@@ -296,7 +296,7 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = G
   }
   if(!is.null(xvts)){
     for(jj in 0:lambdaOrder){
-        dmat[, ncol(dmat) - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+        dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
                                                             (nrow(xvts) - jj), ])
     }
   }
@@ -530,7 +530,7 @@ VAR.oneStepMSFE <- function(old.vts, new.vts, order){
 # ------------------------------------------------------------------------------------
 
 inSampleError <- function(vts, xvts = NULL, xvts2 = NULL, net, alphaOrder, betaOrder, 
-                          lambdaOrder, lambdaOrder2, globalalpha, positiveCoef){
+                          lambdaOrder = NULL, lambdaOrder2 = NULL, globalalpha, positiveCoef){
   if(positiveCoef){
     stop("positiveCoef = TRUE not supported yet")
   }
