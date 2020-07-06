@@ -295,15 +295,20 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = G
     }
   }
   if(!is.null(xvts)){
-    for(jj in 0:lambdaOrder){
-        dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+    if(is.null(xvts2)){
+      for(jj in 0:lambdaOrder){
+        dmat[, ncol(dmat) - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
                                                             (nrow(xvts) - jj), ])
-    }
-  }
-  if(!is.null(xvts2)){
-    for(jj in 0:lambdaOrder2){
-      dmat[, ncol(dmat) - lambdaOrder2 + jj] <- vec(xvts2[(maxOrder + 1 - jj):
-                                                          (nrow(xvts2) - jj), ])
+      }
+    }else{
+      for(jj in 0:lambdaOrder){
+        dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+                                                                               (nrow(xvts) - jj), ])
+      }
+      for(jj in 0:lambdaOrder2){
+        dmat[, ncol(dmat) - lambdaOrder2 + jj] <- vec(xvts2[(maxOrder + 1 - jj):
+                                                              (nrow(xvts2) - jj), ])
+      }
     }
   }
   if (is.null(fact.var)) {
