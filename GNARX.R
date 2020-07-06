@@ -18,10 +18,11 @@ library(GNAR)
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
 
-GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
-                      betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
+GNARXfit <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = GNAR::fiveNet, 
+                      alphaOrder = 2, betaOrder = c(1, 1), lambdaOrder = NULL,
+                      lambdaOrder2 = NULL, fact.var = NULL, globalalpha = TRUE, 
                       tvnets = NULL, netsstart = NULL, ErrorIfNoNei = TRUE, 
-                      xvts = NULL, lambdaOrder = NULL, positiveCoef = FALSE) 
+                      positiveCoef = FALSE) 
 {
   stopifnot(is.GNARnet(net))
   stopifnot(ncol(vts) == length(net$edges))
@@ -46,25 +47,38 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
       maxOrder <- alphaOrder
     }
   }else{
-    if(nrow(xvts) != nrow(vts)){
+    if((nrow(xvts) != nrow(vts))){
       stop("xvts and vts must have the same time range")
     }else{
       if(lambdaOrder%%1 != 0 || lambdaOrder < 0){
         stop("lambdaOrder must be a non-negative integer")
       }else{
-        maxOrder <- max(alphaOrder, lambdaOrder)
+        if(is.null(lambdaOrder2)){
+          maxOrder <- max(alphaOrder, lambdaOrder)
+        }else{
+          if(lambdaOrder2%%1 != 0 || lambdaOrder2 < 0){
+            stop("lambdaOrder2 must be a non-negative integer")
+          }else{
+            maxOrder <- max(alphaOrder, lambdaOrder, lambdaOrder2)
+          }
+        }
       }
     }
+  }
+  if(is.null(xvts) && !is.null(xvts2)){
+    stop("xvts cannot be null when xvts2 is not null")
   }
   frbic <- list(nnodes = length(net$edges), alphas.in = alphaOrder, 
                 betas.in = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
                 xtsp = tsp(vts), time.in = nrow(vts), net.in = net, 
                 final.in = vts[(nrow(vts) - maxOrder + 1):nrow(vts), ], 
-                lambdas.in = lambdaOrder, positiveCoef = positiveCoef)
+                lambdas.in = lambdaOrder, positiveCoef = positiveCoef,
+                lambdas2.in = lambdaOrder2)
   dmat <- GNARXdesign(vts = vts, net = net, alphaOrder = alphaOrder, 
                      betaOrder = betaOrder, fact.var = fact.var, globalalpha = globalalpha, 
                      tvnets = tvnets, netsstart = netsstart, 
-                     xvts = xvts, lambdaOrder = lambdaOrder)
+                     xvts = xvts, lambdaOrder = lambdaOrder, xvts2 = xvts2, 
+                     lambdaOrder2 = lambdaOrder2)
   if (ErrorIfNoNei) {
     if (any(apply(dmat == 0, 2, all))) {
       parname <- strsplit(names(which(apply(dmat == 0, 
@@ -77,7 +91,7 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
   predt <- nrow(vts) - maxOrder
   yvec <- NULL
   for (ii in 1:length(net$edges)) {
-    yvec <- c(yvec, vts[((alphaOrder + 1):(predt + alphaOrder)), 
+    yvec <- c(yvec, vts[((maxOrder + 1):(predt + maxOrder)), 
                         ii])
   }
   dmat2 <- dmat[complete.cases(dmat), ]
@@ -117,9 +131,10 @@ GNARXfit <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2,
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
 
-GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 2, 
-                         betaOrder = c(1, 1), fact.var = NULL, globalalpha = TRUE, 
-                         tvnets = NULL, netsstart = NULL, xvts = NULL, lambdaOrder = NULL) 
+GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = GNAR::fiveNet, 
+                         alphaOrder = 2, betaOrder = c(1, 1), lambdaOrder = NULL,
+                         lambdaOrder2 = NULL, fact.var = NULL, globalalpha = TRUE, 
+                         tvnets = NULL, netsstart = NULL) 
 {
   stopifnot(is.GNARnet(net))
   stopifnot(ncol(vts) == length(net$edges))
@@ -152,7 +167,11 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
       if(lambdaOrder%%1 != 0 || lambdaOrder < 0){
         stop("lambdaOrder must be a non-negative integer")
       }else{
-        maxOrder <- max(alphaOrder, lambdaOrder)
+        if(is.null(lambdaOrder2)){
+          maxOrder <- max(alphaOrder, lambdaOrder)
+        }else{
+          maxOrder <- max(alphaOrder, lambdaOrder, lambdaOrder2)
+        }
       }
     }
   }
@@ -183,8 +202,14 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
   }
   if(!is.null(lambdaOrder)){
     for(ii in 0:lambdaOrder){
-      parNames <- c(parNames, paste("lambda", ii, sep = ""))
-      parLoc <- c(parLoc, "l") 
+      parNames <- c(parNames, paste("lambda.", ii, sep = ""))
+      parLoc <- c(parLoc, "l1") 
+    }
+  }
+  if(!is.null(lambdaOrder2)){
+    for(ii in 0:lambdaOrder2){
+      parNames <- c(parNames, paste("lambda2.", ii, sep = ""))
+      parLoc <- c(parLoc, "l2") 
     }
   }
   predt <- nrow(vts) - maxOrder
@@ -275,6 +300,12 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
                                                             (nrow(xvts) - jj), ])
     }
   }
+  if(!is.null(xvts2)){
+    for(jj in 0:lambdaOrder2){
+      dmat[, ncol(dmat) - lambdaOrder2 + jj] <- vec(xvts2[(maxOrder + 1 - jj):
+                                                          (nrow(xvts2) - jj), ])
+    }
+  }
   if (is.null(fact.var)) {
     return(dmat)
   } else {
@@ -306,24 +337,32 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, net = GNAR::fiveNet, alphaOrder = 
 # ------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 
-GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim, 
+GNARXOrder <- function(vts, xvts = NULL, xvts2 = NULL, net, alphaLim, 
+                       lambdaLim = NULL, lambdaLim2 = NULL, globalalpha, 
                        positiveCoef = FALSE){
   if(is.null(xvts)){
     bestLambda <- NULL
   }else{
     bestLambda <- 0
   }
+  if(is.null(xvts2)){
+    bestLambda2 <- NULL
+  }else{
+    bestLambda2 <- 0
+  }
   if(positiveCoef){
     bestAlpha <- 1
     newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = 2, 
                        betaOrder = c(0,0), globalalpha = globalalpha, xvts = xvts, 
-                       lambdaOrder = bestLambda, positiveCoef = positiveCoef)$BIC
+                       lambdaOrder = bestLambda, positiveCoef = positiveCoef, xvts2 = xvts2,
+                       lambdaOrder2 = bestLambda2)$BIC
     bestBIC <- newBIC + 1
   }else{
     bestAlpha <- 0
     newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = 1, 
                        betaOrder = 0, globalalpha = globalalpha, xvts = xvts, 
-                       lambdaOrder = bestLambda, positiveCoef = positiveCoef)$BIC
+                       lambdaOrder = bestLambda, positiveCoef = positiveCoef, xvts2 = xvts2,
+                       lambdaOrder2 = bestLambda2)$BIC
     bestBIC <- newBIC + 1
   }
   while(newBIC < bestBIC & bestAlpha < alphaLim){ # alpha search
@@ -332,7 +371,8 @@ GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim,
     newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha + 1, 
                        betaOrder = rep(0, bestAlpha + 1), globalalpha = globalalpha, 
                        xvts = xvts, lambdaOrder = bestLambda, 
-                       positiveCoef = positiveCoef)$BIC
+                       positiveCoef = positiveCoef, xvts2 = xvts2,
+                       lambdaOrder2 = bestLambda2)$BIC
   }
   bestBeta <- rep(0, bestAlpha)
   bestBeta[1] <- -1 
@@ -347,7 +387,8 @@ GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim,
       newBIC <- try(GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha, 
                              betaOrder = newBeta, globalalpha = globalalpha, 
                              xvts = xvts, lambdaOrder = bestLambda, 
-                             positiveCoef = positiveCoef)$BIC, silent = TRUE)
+                             positiveCoef = positiveCoef, xvts2 = xvts2,
+                             lambdaOrder2 = bestLambda2)$BIC, silent = TRUE)
       if(inherits(newBIC, "try-error")){
         newBIC <- bestBIC + 1
       }
@@ -368,10 +409,26 @@ GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim,
       newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha, 
                          betaOrder = bestBeta, globalalpha = globalalpha, 
                          xvts = xvts, lambdaOrder = bestLambda + 1, 
-                         positiveCoef = positiveCoef)$BIC
+                         positiveCoef = positiveCoef, xvts2 = xvts2,
+                         lambdaOrder2 = bestLambda2)$BIC
     }
-    bestOrder <- list(bestBIC = bestBIC, bestAlpha = bestAlpha, bestBeta = bestBeta, 
-                      bestLambda = bestLambda)
+    if(is.null(xvts2)){
+      bestOrder <- list(bestBIC = bestBIC, bestAlpha = bestAlpha, bestBeta = bestBeta, 
+                        bestLambda = bestLambda)
+    }else{
+      newBIC <- bestBIC
+      bestBIC <- newBIC + 1
+      bestLambda2 <- -1
+      while(newBIC < bestBIC & bestLambda2 < lambdaLim2){ # lambda search
+        bestBIC <- newBIC
+        bestLambda2 <- bestLambda2 + 1
+        newBIC <- GNARXfit(vts = vts, net = net, alphaOrder = bestAlpha, 
+                           betaOrder = bestBeta, globalalpha = globalalpha, 
+                           xvts = xvts, lambdaOrder = bestLambda, 
+                           positiveCoef = positiveCoef, xvts2 = xvts2,
+                           lambdaOrder2 = bestLambda2 + 1)$BIC
+      }
+    }
   }
   return(bestOrder)
 }
@@ -382,24 +439,39 @@ GNARXOrder <- function(vts, net, globalalpha, xvts, alphaLim, lambdaLim,
 # ------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 
-oneStepMSFE <- function(old.vts, old.xvts = NULL, new.vts, new.xvts = NULL, net, 
-                        globalalpha, alphaOrder, betaOrder, lambdaOrder = NULL, 
-                        positiveCoef = FALSE){
+oneStepMSFE <- function(old.vts, old.xvts = NULL, old.xvts2 = NULL, new.vts, 
+                        new.xvts = NULL, new.xvts2 = NULL, net, 
+                        alphaOrder, betaOrder, lambdaOrder = NULL, lambdaOrder2 = NULL, 
+                        globalalpha, positiveCoef = FALSE){
   noPreds <- nrow(new.vts) - nrow(old.vts)
   predMat <- matrix(NA, nrow = noPreds, ncol = ncol(old.vts))
   for(i in 1:noPreds){
     if(is.null(old.xvts)){
       fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], net = net, 
                       alphaOrder = alphaOrder, betaOrder = betaOrder,
-                      globalalpha = globalalpha, xvts = NULL, 
-                      lambdaOrder = NULL, positiveCoef = positiveCoef)
+                      globalalpha = globalalpha, positiveCoef = positiveCoef)
+      predMat[i, ] <- GNARXpredict(fit = fit, new.vts = new.vts[1:(nrow(old.vts) + i),]) 
     }else{
-      fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], net = net, 
-                      alphaOrder = alphaOrder, betaOrder = betaOrder,
-                      globalalpha = globalalpha, xvts = new.xvts[1:(nrow(old.xvts) + i - 1),], 
-                      lambdaOrder = lambdaOrder, positiveCoef = positiveCoef)
+      if(is.null(old.xvts2)){
+        fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], 
+                        xvts = new.xvts[1:(nrow(old.xvts) + i - 1),], 
+                        net = net, alphaOrder = alphaOrder, betaOrder = betaOrder, 
+                        lambdaOrder = lambdaOrder, globalalpha = globalalpha, 
+                        positiveCoef = positiveCoef)
+        predMat[i, ] <- GNARXpredict(fit = fit, new.vts = new.vts[1:(nrow(old.vts) + i),], 
+                                     new.xvts = new.xvts[1:(nrow(old.xvts) + i),]) 
+      }else{
+        fit <- GNARXfit(vts = new.vts[1:(nrow(old.vts) + i - 1),], 
+                        xvts = new.xvts[1:(nrow(old.xvts) + i - 1),],
+                        xvts2 = new.xvts[1:(nrow(old.xvts2) + i - 1),],
+                        net = net, alphaOrder = alphaOrder, betaOrder = betaOrder, 
+                        lambdaOrder = lambdaOrder, lambdaOrder2 = lambdaOrder2,
+                        globalalpha = globalalpha, positiveCoef = positiveCoef)
+        predMat[i, ] <- GNARXpredict(fit = fit, new.vts = new.vts[1:(nrow(old.vts) + i),], 
+                                     new.xvts = new.xvts[1:(nrow(old.xvts) + i),], 
+                                     new.xvts2 = new.xvts2[1:(nrow(old.xvts2) + i),]) 
+      }
     }
-    predMat[i, ] <- GNARXpredict(fit = fit, new.vts = new.vts[1:(nrow(old.vts) + i),]) 
   }
   MSFE <- mean((predMat - new.vts[(nrow(old.vts) + 1):nrow(new.vts),])^2, na.rm = TRUE)
   return(list(MSFE = MSFE, predMat = predMat))
@@ -412,13 +484,14 @@ oneStepMSFE <- function(old.vts, old.xvts = NULL, new.vts, new.xvts = NULL, net,
 # ------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 
-GNARXpredict <- function(fit, new.vts, new.xvts = NULL){
+GNARXpredict <- function(fit, new.vts, new.xvts = NULL, new.xvts2 = NULL){
   nnodes <- fit$frbic$nnodes
-  dmat <- GNARXdesign(vts = new.vts, net = fit$frbic$net.in, alphaOrder = fit$frbic$alphas.in, 
-                      betaOrder = fit$frbic$betas.in, fact.var = fit$frbic$fact.var, 
+  dmat <- GNARXdesign(vts = new.vts, xvts = new.xvts, xvts2 = new.xvts2,
+                      net = fit$frbic$net.in, alphaOrder = fit$frbic$alphas.in, 
+                      betaOrder = fit$frbic$betas.in, lambdaOrder = fit$frbic$lambdas.in, 
+                      lambdaOrder2 = fit$frbic$lambdas2.in, fact.var = fit$frbic$fact.var, 
                       globalalpha = fit$frbic$globalalpha, tvnets = fit$frbic$tvnets, 
-                      netsstart = fit$frbic$netsstart, xvts = new.xvts, 
-                      lambdaOrder = fit$frbic$lambdas.in)
+                      netsstart = fit$frbic$netsstart)
   gammaHat <- coef(fit$mod)
   if(fit$frbic$positiveCoef){
     gammaHat <- gammaHat[-1, ]
@@ -456,14 +529,15 @@ VAR.oneStepMSFE <- function(old.vts, new.vts, order){
 # ------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------
 
-inSampleError <- function(vts, net, alphaOrder, betaOrder, globalalpha, 
-                          xvts, lambdaOrder, positiveCoef){
+inSampleError <- function(vts, xvts = NULL, xvts2 = NULL, net, alphaOrder, betaOrder, 
+                          lambdaOrder, lambdaOrder2, globalalpha, positiveCoef){
   if(positiveCoef){
-    stop("positiveCoef = TRUE not supported; need to remove intercept")
+    stop("positiveCoef = TRUE not supported yet")
   }
   nnodes <- ncol(vts)
-  mod <- GNARXfit(vts = vts, net = net, alphaOrder = alphaOrder, betaOrder = betaOrder,
-                  globalalpha = globalalpha, xvts = xvts, lambdaOrder = lambdaOrder,
+  mod <- GNARXfit(vts = vts, xvts = xvts, xvts2 = xvts2, net = net, 
+                  alphaOrder = alphaOrder, betaOrder = betaOrder, lambdaOrder = lambdaOrder,
+                  lambdaOrder2 = lambdaOrder2, globalalpha = globalalpha, 
                   positiveCoef = positiveCoef)
   fittedVals <- mod$dd %*% coef(mod$mod)
   fittedVals <- matrix(fittedVals, ncol = nnodes)
