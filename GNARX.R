@@ -8,9 +8,12 @@
 # 7) inSampleError: computes the in-sample MSE for a given GNARX specification*2
 # * Haven't yet been tested with a non-null xvts parameter
 # *2 Doesn't yet work with positive coefficient restriction; need to remove first coefficient
+# 8) bootstrapPI: computes the bootstrap prediction interval for GNARX models
 
 library(matrixcalc)
 library(GNAR)
+library(glmnet)
+library(rlist)
 
 # ------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------
@@ -254,6 +257,9 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = G
             if (length(Nei[[betaN[bb]]]) > 1) {
               vts.cut <- vts[((maxOrder + 1 - betaTimes[bb]):
                                 (predt + (maxOrder - betaTimes[bb]))), Nei[[betaN[bb]]]]
+              if(is.null(dim(vts.cut))){
+                vts.cut <- t(matrix(vts.cut))
+              }
               for (kk in 1:nrow(vts.cut)) {
                 if (any(is.na(vts.cut[kk, ]))) {
                   if (all(is.na(vts.cut[kk, ]))) {
@@ -297,17 +303,33 @@ GNARXdesign <- function (vts = GNAR::fiveVTS, xvts = NULL, xvts2 = NULL, net = G
   if(!is.null(xvts)){
     if(is.null(xvts2)){
       for(jj in 0:lambdaOrder){
-        dmat[, ncol(dmat) - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
-                                                            (nrow(xvts) - jj), ])
+        if(is.null(dim(xvts[(maxOrder + 1 - jj):(nrow(xvts) - jj), ]))){
+          dmat[, ncol(dmat) - lambdaOrder + jj] <- matrix(xvts[(maxOrder + 1 - jj):
+                                                                 (nrow(xvts) - jj), ])
+        }else{
+          dmat[, ncol(dmat) - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+                                                              (nrow(xvts) - jj), ])
+        }
+        
       }
     }else{
       for(jj in 0:lambdaOrder){
-        dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
-                                                                               (nrow(xvts) - jj), ])
+        if(is.null(dim(xvts[(maxOrder + 1 - jj):(nrow(xvts) - jj), ]))){
+          dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- matrix(xvts[(maxOrder + 1 - jj):
+                                                                                    (nrow(xvts) - jj), ])
+        }else{
+          dmat[, ncol(dmat) - lambdaOrder2 - 1 - lambdaOrder + jj] <- vec(xvts[(maxOrder + 1 - jj):
+                                                                                 (nrow(xvts) - jj), ])
+        }
       }
       for(jj in 0:lambdaOrder2){
-        dmat[, ncol(dmat) - lambdaOrder2 + jj] <- vec(xvts2[(maxOrder + 1 - jj):
-                                                              (nrow(xvts2) - jj), ])
+        if(is.null(dim(xvts2[(maxOrder + 1 - jj):(nrow(xvts2) - jj), ]))){
+          dmat[, ncol(dmat) - lambdaOrder2 + jj] <- matrix(xvts2[(maxOrder + 1 - jj):
+                                                                   (nrow(xvts2) - jj), ])
+        }else{
+          dmat[, ncol(dmat) - lambdaOrder2 + jj] <- vec(xvts2[(maxOrder + 1 - jj):
+                                                                (nrow(xvts2) - jj), ])
+        }
       }
     }
   }
@@ -550,3 +572,94 @@ inSampleError <- function(vts, xvts = NULL, xvts2 = NULL, net, alphaOrder, betaO
   fittedVals <- matrix(fittedVals, ncol = nnodes)
   MSE <- mean((fittedVals - tail(vts, nrow(fittedVals)))^2, na.rm = TRUE)
 }
+
+
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
+
+vts <- PMIData # 1:269
+xvts <- constantExternalData
+xvts2 <- constantDeathData
+net <- tradeNet
+alphaOrder <- 2
+betaOrder <- c(1,0)
+lambdaOrder <- 0
+lambdaOrder2 <- 0
+globalalpha <- TRUE
+bootstrapNo <- 1000
+alpha <- 0.05
+T_old <- 264
+h <- 6
+# -----
+t = 3
+fit = modFit
+new.vts = Ystar[1:t,]
+new.xvts = xvts[1:t,]
+new.xvts2 = xvts2[1:t,]
+# -----
+vts = new.vts
+xvts = new.xvts
+xvts2 = new.xvts2
+net = fit$frbic$net.in
+alphaOrder = fit$frbic$alphas.in
+betaOrder = fit$frbic$betas.in
+lambdaOrder = fit$frbic$lambdas.in
+lambdaOrder2 = fit$frbic$lambdas2.in
+fact.var = fit$frbic$fact.var
+globalalpha = fit$frbic$globalalpha
+tvnets = fit$frbic$tvnets
+netsstart = fit$frbic$netsstart
+
+bootstrapPI <- function(vts, xvts, xvts2, T_old, net, alphaOrder, betaOrder,
+                        lambdaOrder, lambdaOrder2, globalalpha, h, bootstrapNo, alpha){
+  maxOrder <- max(alphaOrder, lambdaOrder, lambdaOrder2)
+  nobs <- nrow(vts)
+  nnodes <- ncol(vts)
+  modFit <- GNARXfit(vts = vts, xvts = xvts[1:nobs,], xvts2 = xvts2[1:nobs,], net = net,
+                     alphaOrder = alphaOrder, betaOrder = betaOrder, 
+                     lambdaOrder = lambdaOrder, lambdaOrder2 = lambdaOrder2, 
+                     globalalpha = globalalpha)
+  gammaHat <- coef(modFit$mod)
+  Yhat <- modFit$dd %*% gammaHat
+  Yhat <- matrix(data = Yhat, ncol = nnodes)
+  Yhat <- rbind(matrix(data = NA, nrow = maxOrder, ncol = nnodes), Yhat)
+  uHat <- Yhat - vts
+  firstNonNARow <- min(which(complete.cases(vts) != 0))
+  uFirstNonNARow <- min(which(complete.cases(uHat) != 0))
+  if(firstNonNARow >= (T_old - maxOrder + 1)){
+    stop("Not enough rows in vts without NAs")
+  }
+  for(b in 1:bootstrapNo){
+    uStar <- matrix(data = NA, nrow = nobs + h, ncol = nnodes)
+    uList <- list()
+    for(k in uFirstNonNARow:T_old){
+      uList[[k - uFirstNonNARow + 1]] <- uHat[k,]
+    }
+    for(t in (maxOrder + 1):T_old){
+      uStar[t,] <- list.sample(.data = uList, size = 1)[[1]]
+    }
+    Ylist <- list()
+    for(k in firstNonNARow:(T_old - maxOrder + 1)){
+      Ylist[[k - firstNonNARow + 1]] <- vts[k:(k + maxOrder - 1),]
+    }
+    Ystar <- matrix(data = NA, nrow = nobs + h, ncol = nnodes)
+    Ystar[1:maxOrder,] <- list.sample(.data = Ylist, size = 1)[[1]]
+    for(t in (maxOrder + 1):nobs){
+      Ystar[t,] <- GNARXpredict(fit = modFit, new.vts = Ystar[1:t,], new.xvts = xvts[1:t,],
+                                new.xvts2 = xvts2[1:t,]) + uHatStar[t,]
+    }
+    
+    
+    
+    
+    print(b)
+  }
+  
+  
+  return(c(lo, pred, hi))
+  # Make sure it returns all intervals UP TO h
+  # If too wide, try not bootstrap sampling separately for before and after T_Old
+} 
